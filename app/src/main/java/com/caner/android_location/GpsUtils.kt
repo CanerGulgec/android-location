@@ -2,59 +2,69 @@ package com.caner.android_location
 
 import android.app.Activity
 import android.content.Context
-import android.content.IntentSender
+import android.content.IntentSender.SendIntentException
 import android.location.LocationManager
 import android.util.Log
+import android.widget.Toast
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.LocationSettingsRequest
-import com.google.android.gms.location.LocationSettingsStatusCodes
+import com.google.android.gms.location.*
 
-class GpsUtils(private val context: Activity) {
-    private val locationManager: LocationManager =
-        context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    var settingsBuilder : LocationSettingsRequest.Builder? = null
 
-    init {
-        val locationRequest = LocationRequest.create()
-        locationRequest.priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
+class GpsUtils(private val context: Context) {
+    private val mSettingsClient: SettingsClient = LocationServices.getSettingsClient(context)
+    private val mLocationSettingsRequest: LocationSettingsRequest
+    private val locationManager: LocationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private val locationRequest: LocationRequest = LocationRequest.create()
 
-        settingsBuilder = LocationSettingsRequest.Builder()
-            .addLocationRequest(locationRequest)
-        settingsBuilder?.setAlwaysShow(true)
-    }
-
+    // method for turn on GPS
     fun turnGPSOn(onGpsListener: OnGpsListener?) {
         if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             onGpsListener?.gpsStatusOn()
         } else {
-            val result = LocationServices.getSettingsClient(context).checkLocationSettings(settingsBuilder?.build())
-            result.addOnCompleteListener { task ->
-                try {
-                    task.getResult(ApiException::class.java)
-                } catch (ex: ApiException) {
-                    when (ex.statusCode) {
+            mSettingsClient
+                .checkLocationSettings(mLocationSettingsRequest)
+                .addOnSuccessListener((context as Activity)) { //  GPS is already enable, callback GPS status through listener
+                    onGpsListener?.gpsStatusOn()
+                }
+                .addOnFailureListener(
+                    context
+                ) { e ->
+                    when ((e as ApiException).statusCode) {
                         LocationSettingsStatusCodes.RESOLUTION_REQUIRED -> try {
-                            Log.e("gpsUtils", "Gps status off")
-                            val resolvableApiException = ex as ResolvableApiException
-                            resolvableApiException.startResolutionForResult(context, Constants.REQUEST_CHECK_SETTINGS
+                            // Show the dialog by calling startResolutionForResult(), and check the
+                            // result in onActivityResult().
+                            val rae = e as ResolvableApiException
+                            rae.startResolutionForResult(
+                                context,
+                                Constants.REQUEST_CHECK_SETTINGS
                             )
-                        } catch (e: IntentSender.SendIntentException) {
-                            Log.e("gpsUtils", "PendingIntent unable to execute request.")
+                        } catch (sie: SendIntentException) {
+                            Log.i("TAG", "PendingIntent unable to execute request.")
                         }
-
                         LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE -> {
-                            Log.e("gpsUtils", "Something is wrong in your GPS")
+                            val errorMessage = "Location settings are inadequate, and cannot be " +
+                                    "fixed here. Fix in Settings."
+                            Log.e("TAG", errorMessage)
+                            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG)
+                                .show()
                         }
                     }
                 }
-            }
         }
     }
 
     interface OnGpsListener {
         fun gpsStatusOn()
+    }
+
+    init {
+        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        locationRequest.interval = 10 * 1000.toLong()
+        locationRequest.fastestInterval = 2 * 1000.toLong()
+        val builder = LocationSettingsRequest.Builder()
+            .addLocationRequest(locationRequest)
+        mLocationSettingsRequest = builder.build()
+        builder.setAlwaysShow(true) //this is the key ingredient
     }
 }

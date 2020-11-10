@@ -1,8 +1,8 @@
 package com.caner.android_location
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.location.Location
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         })
     }
 
+    @SuppressLint("MissingPermission")
     private fun getLastLocation() {
         if (PermissionHelper.getLocationPermission(this, Constants.PERMISSION_LOCATION)) {
             mFusedLocationClient?.lastLocation
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun requestNewLocationData() {
         val locationRequest = LocationRequest.create()
         locationRequest.priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
