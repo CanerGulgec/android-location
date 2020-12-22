@@ -15,17 +15,16 @@ class GpsUtils(private val context: Context) {
     private val mSettingsClient: SettingsClient = LocationServices.getSettingsClient(context)
     private val mLocationSettingsRequest: LocationSettingsRequest
     private val locationManager: LocationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    private val locationRequest: LocationRequest = LocationRequest.create()
+    private val locationRequest: LocationRequest = createLocationRequest()
 
-    // method for turn on GPS
-    fun turnGPSOn(onGpsListener: OnGpsListener?) {
+    fun turnGPSOn(onGpsListener: () -> Unit) {
         if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            onGpsListener?.gpsStatusOn()
+            onGpsListener.invoke()
         } else {
             mSettingsClient
                 .checkLocationSettings(mLocationSettingsRequest)
-                .addOnSuccessListener((context as Activity)) { //  GPS is already enable, callback GPS status through listener
-                    onGpsListener?.gpsStatusOn()
+                .addOnSuccessListener((context as Activity)) { //  GPS is already enabled, callback GPS status through listener
+                    onGpsListener.invoke()
                 }
                 .addOnFailureListener(
                     context
@@ -54,14 +53,7 @@ class GpsUtils(private val context: Context) {
         }
     }
 
-    interface OnGpsListener {
-        fun gpsStatusOn()
-    }
-
     init {
-        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        locationRequest.interval = 10 * 1000.toLong()
-        locationRequest.fastestInterval = 2 * 1000.toLong()
         val builder = LocationSettingsRequest.Builder()
             .addLocationRequest(locationRequest)
         mLocationSettingsRequest = builder.build()

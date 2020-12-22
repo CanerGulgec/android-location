@@ -1,23 +1,33 @@
 package com.caner.android_location
 
-import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.view.View
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.asLiveData
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.launch
 
+@ExperimentalCoroutinesApi
 class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     GoogleMap.OnCameraIdleListener {
 
-    private var mFusedLocationClient: FusedLocationProviderClient? = null
+    private val mFusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
 
     private lateinit var mMap: GoogleMap
     private var centerPos = LatLng(0.0, 0.0)
@@ -27,7 +37,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationMapView.apply {
             onCreate(null)
             onResume()
@@ -44,6 +53,29 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         }
     }
 
+    private suspend fun getLastKnownLocation() {
+        try {
+            val lastLocation = mFusedLocationClient?.awaitLastLocation()
+            lastLocation?.let {
+                setLocation(it)
+            } ?: startUpdatingLocation()
+        } catch (e: Exception) {
+            Log.d("TAG", "Unable to get location", e)
+        }
+    }
+
+    private fun startUpdatingLocation() {
+        mFusedLocationClient.locationFlow()
+            .conflate()
+            .catch { e ->
+                Log.d("TAG", "Unable to get location", e)
+            }
+            .asLiveData()
+            .observe(this, { location ->
+                setLocation(location)
+            })
+    }
+
     override fun onCameraIdle() {
         val lat = mMap.cameraPosition.target.latitude
         val lng = mMap.cameraPosition.target.longitude
@@ -54,64 +86,20 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     }
 
     private fun addGpsListener() {
-        GpsUtils(this).turnGPSOn(object : GpsUtils.OnGpsListener {
-            override fun gpsStatusOn() {
-                getLastLocation()
+        GpsUtils(this).turnGPSOn {
+            lifecycleScope.launch {
+                getLastKnownLocation()
             }
-        })
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun getLastLocation() {
-        if (PermissionHelper.getLocationPermission(this, Constants.PERMISSION_LOCATION)) {
-            mFusedLocationClient?.lastLocation
-                ?.addOnSuccessListener { location ->
-                    location?.let {
-                        setLocation(it)
-                    } ?: run { requestNewLocationData() }
-                }
-                ?.addOnFailureListener {
-                    it.printStackTrace()
-                }
         }
     }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<String>,
+        permissions: Array<out String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            Constants.PERMISSION_LOCATION -> {
-                val permissionGranted = PermissionHelper.checkPermissionGranted(grantResults)
-                if (permissionGranted) {
-                    getLastLocation()
-                    return
-                }
-                //If user does not give location permission
-                //take action here..
-            }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun requestNewLocationData() {
-        val locationRequest = LocationRequest.create()
-        locationRequest.priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
-        locationRequest.interval = 0
-        locationRequest.fastestInterval = 0
-
-        mFusedLocationClient?.requestLocationUpdates(
-            locationRequest, mLocationCallback,
-            null
-        )
-    }
-
-    private val mLocationCallback: LocationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            setLocation(locationResult.lastLocation)
-            mFusedLocationClient?.removeLocationUpdates(this)
+        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            recreate()
         }
     }
 
@@ -127,7 +115,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
             Constants.REQUEST_CHECK_SETTINGS -> {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        getLastLocation()
+                        lifecycleScope.launch {
+                            getLastKnownLocation()
+                        }
                     }
                     Activity.RESULT_CANCELED -> {
                         //If user rejects turning gps status on
@@ -146,6 +136,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
                     mMap.animateCamera(latLngZoom)
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                0
+            )
         }
     }
 
