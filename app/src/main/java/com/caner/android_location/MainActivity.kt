@@ -1,5 +1,6 @@
 package com.caner.android_location
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -56,23 +57,26 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     private fun addGpsListener() {
         GpsUtils(this).turnGPSOn(object : GpsUtils.OnGpsListener {
             override fun gpsStatusOn() {
-                getLastLocation()
+                checkLocationPermission()
             }
         })
     }
 
-    @SuppressLint("MissingPermission")
-    private fun getLastLocation() {
-        if (PermissionHelper.getLocationPermission(this, Constants.PERMISSION_LOCATION)) {
-            mFusedLocationClient?.lastLocation
-                ?.addOnSuccessListener { location ->
-                    location?.let {
-                        setLocation(it)
-                    } ?: run { requestNewLocationData() }
-                }
-                ?.addOnFailureListener {
-                    it.printStackTrace()
-                }
+    private fun checkLocationPermission() {
+        if (getLocationPermission(Constants.PERMISSION_LOCATION)) {
+            checkBackgroundLocationPermission()
+        }
+    }
+
+    private fun checkBackgroundLocationPermission() {
+        if (isBackgroundLocationPermissionAvailable) {
+            if (!isGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+                requestBackgroundLocation(Constants.PERMISSION_BACKGROUND_LOCATION)
+                return
+            }
+            getLastLocation()
+        } else {
+            getLastLocation()
         }
     }
 
@@ -84,15 +88,31 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             Constants.PERMISSION_LOCATION -> {
-                val permissionGranted = PermissionHelper.checkPermissionGranted(grantResults)
+                val permissionGranted = checkPermissionGranted(grantResults)
                 if (permissionGranted) {
-                    getLastLocation()
+                    checkLocationPermission()
                     return
                 }
                 //If user does not give location permission
                 //take action here..
             }
+            Constants.PERMISSION_BACKGROUND_LOCATION -> {
+                getLastLocation()
+            }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getLastLocation() {
+        mFusedLocationClient?.lastLocation
+            ?.addOnSuccessListener { location ->
+                location?.let {
+                    setLocation(it)
+                } ?: run { requestNewLocationData() }
+            }
+            ?.addOnFailureListener {
+                it.printStackTrace()
+            }
     }
 
     @SuppressLint("MissingPermission")
@@ -127,7 +147,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
             Constants.REQUEST_CHECK_SETTINGS -> {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        getLastLocation()
+                        checkLocationPermission()
                     }
                     Activity.RESULT_CANCELED -> {
                         //If user rejects turning gps status on
