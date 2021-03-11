@@ -18,7 +18,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     GoogleMap.OnCameraIdleListener {
 
-    private var mFusedLocationClient: FusedLocationProviderClient? = null
+    private val mFusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this)  }
 
     private lateinit var mMap: GoogleMap
     private var centerPos = LatLng(0.0, 0.0)
@@ -28,7 +28,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationMapView.apply {
             onCreate(null)
             onResume()
@@ -55,11 +54,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     }
 
     private fun addGpsListener() {
-        GpsUtils(this).turnGPSOn(object : GpsUtils.OnGpsListener {
-            override fun gpsStatusOn() {
-                checkLocationPermission()
-            }
-        })
+        GpsUtils(this).turnGPSOn {
+            checkLocationPermission()
+        }
     }
 
     private fun checkLocationPermission() {

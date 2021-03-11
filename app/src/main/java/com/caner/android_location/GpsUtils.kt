@@ -54,10 +54,6 @@ class GpsUtils(private val context: Context) {
         }
     }
 
-    interface OnGpsListener {
-        fun gpsStatusOn()
-    }
-
     init {
         val builder = LocationSettingsRequest.Builder()
             .addLocationRequest(locationRequest)
