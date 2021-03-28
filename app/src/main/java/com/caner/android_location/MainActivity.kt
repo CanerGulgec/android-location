@@ -10,8 +10,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import androidx.core.app.ActivityCompat
-import androidx.lifecycle.asLiveData
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.*
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -19,8 +18,7 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 @ExperimentalCoroutinesApi
@@ -65,6 +63,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
     }
 
     private fun startUpdatingLocation() {
+/*
+       // LiveData
         mFusedLocationClient.locationFlow()
             .conflate()
             .catch { e ->
@@ -74,6 +74,26 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
             .observe(this, { location ->
                 setLocation(location)
             })
+*/
+
+        // when you have only one flow to collect
+/*        mFusedLocationClient.locationFlow()
+            .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+            .onEach {
+                // New location! Update the map
+                setLocation(it)
+            }
+            .launchIn(lifecycleScope)*/
+
+        addRepeatingJob(Lifecycle.State.STARTED) {
+            mFusedLocationClient.locationFlow()
+                .conflate()
+                .catch { e ->
+                    Log.d("TAG", "Unable to get location", e)
+                }.collect {
+                    setLocation(it)
+                }
+        }
     }
 
     override fun onCameraIdle() {
@@ -98,6 +118,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             recreate()
         }

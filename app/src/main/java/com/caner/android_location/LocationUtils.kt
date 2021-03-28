@@ -50,8 +50,8 @@ fun FusedLocationProviderClient.locationFlow() = callbackFlow<Location> {
     }
 }
 
-fun createLocationRequest() = LocationRequest.create().apply {
-    interval = 3000
-    fastestInterval = 2000
-    priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+fun createLocationRequest(): LocationRequest = LocationRequest.create().apply {
+    interval = 10000
+    fastestInterval = 6000
+    priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
 }
